@@ -1,26 +1,27 @@
-#from __future__ import absolute_import
-#from __future__ import division
-#from __future__ import print_function
-from importFiles import create_roofs_arrays
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+# Imports
+import tensorflow as tf
+
 from importFiles import LEARN
 from importFiles import TEST
+from importFiles import create_roofs_arrays
 
-# Imports
-import numpy as np
-import tensorflow as tf
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
 from tensorflow.contrib import learn
 from tensorflow.contrib.learn.python.learn.estimators import model_fn as model_fn_lib
 
+config=tf.ConfigProto()
+config.gpu_options.allow_growth=True
+config.gpu_options.per_process_gpu_memory_fraction = 0.7
+
+
 tf.logging.set_verbosity(tf.logging.INFO)
 
 # Our application logic will be added here
-
-
-
-
 def cnn_model_fn(features, labels, mode):
   """Model function for CNN."""
   # Input Layer
@@ -46,20 +47,9 @@ def cnn_model_fn(features, labels, mode):
       activation=tf.nn.relu)
   pool2 = tf.layers.max_pooling2d(inputs=conv2, pool_size=[2, 2], strides=2)
 
-  # Convolutional Layer #2 and Pooling Layer #3
-  conv3 = tf.layers.conv2d(
-      inputs=pool2,
-      filters=128,
-      kernel_size=[4, 4],
-      padding="same",
-      activation=tf.nn.relu)
-  pool3 = tf.layers.max_pooling2d(inputs=conv3, pool_size=[2, 2], strides=2)
-
-
   # Dense Layer
-  pool3Shape = pool3.get_shape().as_list()
-  pool3_flat = tf.reshape(pool3, [-1, pool3Shape[1]*pool3Shape[2]*pool3Shape[3]])
-  dense = tf.layers.dense(inputs=pool3_flat, units=8, activation=tf.nn.relu)
+  pool2_flat = tf.reshape(pool2, [-1, 7 * 7 * 64])
+  dense = tf.layers.dense(inputs=pool2_flat, units=1024, activation=tf.nn.relu)
   dropout = tf.layers.dropout(
       inputs=dense, rate=0.4, training=mode == learn.ModeKeys.TRAIN)
 
@@ -97,8 +87,7 @@ def cnn_model_fn(features, labels, mode):
 
 def main(unused_argv):
   # Load training and eval data
-  flags.DEFINE_string('name', 'main',
-                     'main')
+  flags.DEFINE_string('name', 'main', 'main')
 
   train_data, train_labels = create_roofs_arrays(LEARN)
   eval_data, eval_labels = create_roofs_arrays(TEST)
@@ -108,37 +97,39 @@ def main(unused_argv):
   #eval_data = mnist.test.images # Returns np.array
   #eval_labels = np.asarray(mnist.test.labels, dtype=np.int32)
 
-  print(train_data.shape)
 
-  # Create the Estimator
-  classifier = learn.Estimator(
-      model_fn=cnn_model_fn, model_dir="model3")
+  with tf.Session(config=config) as session:
+      with tf.device('/gpu:0'):
+          # print(train_data.shape)
 
-  # Set up logging for predictions
-  tensors_to_log = {"probabilities": "softmax_tensor"}
-  logging_hook = tf.train.LoggingTensorHook(
-      tensors=tensors_to_log, every_n_iter=50)
+          # Create the Estimator
+          classifier = learn.Estimator(
+              model_fn=cnn_model_fn, model_dir="model_gpu_larger_learn_db_60k_with_rotated_batchsize1k")
 
-  # Train the model
-  classifier.fit(
-      x=train_data,
-      y=train_labels,
-      batch_size=100,
-      steps=1000,
-      monitors=[logging_hook])
+          # Set up logging for predictions
+          tensors_to_log = {"probabilities": "softmax_tensor"}
+          logging_hook = tf.train.LoggingTensorHook(
+              tensors=tensors_to_log, every_n_iter=1000)
 
-  # Configure the accuracy metric for evaluation
-  metrics = {
-      "accuracy":
-          learn.MetricSpec(
-              metric_fn=tf.metrics.accuracy, prediction_key="classes"),
-  }
+          # Train the model
+          classifier.fit(
+              x=train_data,
+              y=train_labels,
+              batch_size=1000,
+              steps=60000,
+              monitors=[logging_hook])
 
-  # Evaluate the model and print results
-  eval_results = classifier.evaluate(
-      x=eval_data, y=eval_labels, metrics=metrics)
-  print(eval_results)
+          # Configure the accuracy metric for evaluation
+          metrics = {
+              "accuracy":
+                  learn.MetricSpec(
+                      metric_fn=tf.metrics.accuracy, prediction_key="classes"),
+          }
 
+          # Evaluate the model and print results
+          eval_results = classifier.evaluate(
+              x=eval_data, y=eval_labels, metrics=metrics)
+          print(eval_results)
 
 if __name__ == "__main__":
   tf.app.run()
