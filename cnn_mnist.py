@@ -14,13 +14,14 @@ FLAGS = flags.FLAGS
 from tensorflow.contrib import learn
 from tensorflow.contrib.learn.python.learn.estimators import model_fn as model_fn_lib
 
+config=tf.ConfigProto()
+config.gpu_options.allow_growth=True
+config.gpu_options.per_process_gpu_memory_fraction = 0.7
+
+
 tf.logging.set_verbosity(tf.logging.INFO)
 
 # Our application logic will be added here
-
-
-
-
 def cnn_model_fn(features, labels, mode):
   """Model function for CNN."""
   # Input Layer
@@ -97,8 +98,7 @@ def cnn_model_fn(features, labels, mode):
 
 def main(unused_argv):
   # Load training and eval data
-  flags.DEFINE_string('name', 'main',
-                     'main')
+  flags.DEFINE_string('name', 'main', 'main')
 
   train_data, train_labels = create_roofs_arrays(LEARN)
   eval_data, eval_labels = create_roofs_arrays(TEST)
@@ -138,7 +138,6 @@ def main(unused_argv):
   eval_results = classifier.evaluate(
       x=eval_data, y=eval_labels, metrics=metrics)
   print(eval_results)
-
 
 if __name__ == "__main__":
   tf.app.run()
