@@ -36,7 +36,7 @@ def cnn_model_fn(features, labels, mode):
       activation=tf.nn.relu)
 
   # Pooling Layer #1
-  pool1 = tf.layers.max_pooling2d(inputs=conv1, pool_size=[2, 2], strides=2)
+  pool1 = tf.layers.max_pooling2d(inputs=conv1, pool_size=[2, 2], strides=1)
 
   # Convolutional Layer #2 and Pooling Layer #2
   conv2 = tf.layers.conv2d(
@@ -45,25 +45,24 @@ def cnn_model_fn(features, labels, mode):
       kernel_size=[5, 5],
       padding="same",
       activation=tf.nn.relu)
-  pool2 = tf.layers.max_pooling2d(inputs=conv2, pool_size=[2, 2], strides=2)
+  pool2 = tf.layers.max_pooling2d(inputs=conv2, pool_size=[2, 2], strides=1)
 
   # Convolutional Layer #2 and Pooling Layer #3
   conv3 = tf.layers.conv2d(
       inputs=pool2,
-      filters=128,
-      kernel_size=[4, 4],
+      filters=32,
+      kernel_size=[3, 3],
       padding="same",
       activation=tf.nn.relu)
-  pool3 = tf.layers.max_pooling2d(inputs=conv3, pool_size=[2, 2], strides=2)
+  pool3 = tf.layers.max_pooling2d(inputs=conv3, pool_size=[2, 2], strides=1)
 
 
   # Dense Layer
   pool3Shape = pool3.get_shape().as_list()
   pool3_flat = tf.reshape(pool3, [-1, pool3Shape[1]*pool3Shape[2]*pool3Shape[3]])
-  dense = tf.layers.dense(inputs=pool3_flat, units=8, activation=tf.nn.relu)
+  dense = tf.layers.dense(inputs=pool3_flat, units= pool3Shape[1]*pool3Shape[2]*pool3Shape[3], activation=tf.nn.relu)
   dropout = tf.layers.dropout(
       inputs=dense, rate=0.4, training=mode == learn.ModeKeys.TRAIN)
-
   # Logits Layer
   logits = tf.layers.dense(inputs=dropout, units=3)
 
@@ -102,22 +101,33 @@ def main(unused_argv):
 
   train_data, train_labels = create_roofs_arrays(LEARN)
   eval_data, eval_labels = create_roofs_arrays(TEST)
-  #mnist = learn.datasets.load_dataset("mnist")
-  #train_data = mnist.train.images # Returns np.array
-  #train_labels = np.asarray(mnist.train.labels, dtype=np.int32)
-  #eval_data = mnist.test.images # Returns np.array
-  #eval_labels = np.asarray(mnist.test.labels, dtype=np.int32)
 
   print(train_data.shape)
 
+  metrics = {
+      "accuracy":
+          learn.MetricSpec(
+              metric_fn=tf.metrics.accuracy, prediction_key="classes"),
+  }
+
+
+  validation_monitor = tf.contrib.learn.monitors.ValidationMonitor(
+      eval_data,
+      eval_labels,
+      every_n_steps=2,
+      metrics = metrics)
+
   # Create the Estimator
   classifier = learn.Estimator(
-      model_fn=cnn_model_fn, model_dir="model3")
+      model_fn=cnn_model_fn,
+      model_dir="model4")
 
   # Set up logging for predictions
   tensors_to_log = {"probabilities": "softmax_tensor"}
   logging_hook = tf.train.LoggingTensorHook(
-      tensors=tensors_to_log, every_n_iter=50)
+      tensors=tensors_to_log, every_n_iter=100)
+
+
 
   # Train the model
   classifier.fit(
@@ -125,14 +135,9 @@ def main(unused_argv):
       y=train_labels,
       batch_size=100,
       steps=1000,
-      monitors=[logging_hook])
+      monitors=[ validation_monitor])
 
   # Configure the accuracy metric for evaluation
-  metrics = {
-      "accuracy":
-          learn.MetricSpec(
-              metric_fn=tf.metrics.accuracy, prediction_key="classes"),
-  }
 
   # Evaluate the model and print results
   eval_results = classifier.evaluate(
