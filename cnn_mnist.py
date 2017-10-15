@@ -143,6 +143,7 @@ def main(unused_argv):
   eval_results = classifier.evaluate(
       x=eval_data, y=eval_labels, metrics=metrics)
   print(eval_results)
+  print('a')
 
 if __name__ == "__main__":
   tf.app.run()
