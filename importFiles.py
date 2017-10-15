@@ -61,6 +61,6 @@ create_new_set(TRIANGULAR, 2)
 im_1, result = create_roofs_arrays(LEARN)
 print (im_1.shape)
 print(result.shape)
-
+print('b')
 
 
